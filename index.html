@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modern Water Sectors Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .glass-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .status-bar {
+      height: 8px;
+      transition: all 0.3s ease;
+      border-radius: 4px;
+    }
+    
+    .gradient-bg {
+        background: linear-gradient(135deg, #9dd1e2 0%, #90EE90 100%);
+    }
+    
+    .card-hover {
+      transition: all 0.3s ease;
+    }
+    
+    .card-hover:hover {
+      transform: translateY(-5px);
+    }
+    
+    .icon-container svg {
+      transition: all 0.3s ease;
+    }
+    
+    .icon-container:hover svg {
+      transform: scale(1.1);
+      color: #667eea;
+    }
+    
+    .date-nav-button {
+      transition: all 0.2s ease;
+    }
+    
+    .date-nav-button:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body class="min-h-screen gradient-bg p-4">
+  <!-- Utilizamos un contenedor de ancho completo -->
+  <div class="w-full">
+    <h1 class="text-4xl font-bold text-white mb-12 text-center">
+      Water Sectors Monitor
+    </h1>
+    
+    <!-- Contenedor Grid responsivo para los sectores -->
+    <div id="sectors-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <!-- Las tarjetas se insertarán aquí mediante JavaScript -->
+    </div>
+  </div>
+
+  <!-- Plantilla para la tarjeta de sector -->
+  <template id="sector-template">
+    <div class="glass-card card-hover rounded-2xl shadow-xl overflow-hidden">
+      <div class="p-6">
+        <!-- Cabecera -->
+        <div class="flex flex-col items-center mb-8">
+          <h2 class="text-2xl font-bold text-gray-800 sector-id mb-4"></h2>
+          <div class="flex items-center justify-center space-x-2">
+            <button class="date-nav-button text-gray-600 p-2 rounded-full" onclick="changeDate(this, -1)">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <p class="text-lg text-gray-600 sector-date font-medium"></p>
+            <button class="date-nav-button text-gray-600 p-2 rounded-full" onclick="changeDate(this, 1)">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Cuadrícula de estadísticas -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div class="bg-white/50 rounded-lg p-3">
+            <p class="text-xs text-gray-600">Vol Sector</p>
+            <p class="text-lg font-bold text-gray-800 vol-sector"></p>
+          </div>
+          <div class="bg-white/50 rounded-lg p-3">
+            <p class="text-xs text-gray-600">Vol Abonados</p>
+            <p class="text-lg font-bold text-gray-800 vol-abonados"></p>
+          </div>
+          <div class="bg-white/50 rounded-lg p-3">
+            <p class="text-xs text-gray-600">ANR</p>
+            <p class="text-lg font-bold text-gray-800 anr"></p>
+          </div>
+          <div class="bg-white/50 rounded-lg p-3">
+            <p class="text-xs text-gray-600">Eficiencia</p>
+            <p class="text-lg font-bold text-gray-800 percentage"></p>
+          </div>
+        </div>
+
+        <!-- Barras de estado -->
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Comunicaciones</span>
+              <span class="text-sm font-semibold comunicaciones-value"></span>
+            </div>
+            <div class="bg-gray-200 rounded-full">
+              <div class="status-bar bg-green-500" data-type="comunicaciones"></div>
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Fiabilidad</span>
+              <span class="text-sm font-semibold fiabilidad-value"></span>
+            </div>
+            <div class="bg-gray-200 rounded-full">
+              <div class="status-bar bg-blue-500" data-type="fiabilidad"></div>
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Coherencia</span>
+              <span class="text-sm font-semibold coherencia-value"></span>
+            </div>
+            <div class="bg-gray-200 rounded-full">
+              <div class="status-bar bg-purple-500" data-type="coherencia"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Incidencias -->
+        <div class="mt-6 flex items-center justify-between bg-red-50 rounded-lg p-4">
+          <span class="text-sm text-red-700">Alarmas/Incidencias</span>
+          <span class="incidents px-3 py-1 bg-red-200 text-red-800 rounded-full text-sm font-semibold"></span>
+        </div>
+
+        <!-- Íconos -->
+        <div class="flex justify-center gap-8 mt-6 icon-container">
+          <svg class="w-6 h-6 text-gray-600 cursor-pointer" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M3,3H21V21H3V3M7,7V17H10V7H7M11,7V17H14V7H11M15,7V17H18V7H15Z"/>
+          </svg>
+          <svg class="w-6 h-6 text-gray-600 cursor-pointer" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    const sectors = [
+      {
+        id: '3004_01_01_03',
+        name: 'Los Gallos',
+        date: new Date('2025-01-30'),
+        volSector: '170 m³',
+        volAbonados: '143 m³',
+        anr: '28 m³',
+        percentage: '83.82%',
+        stats: {
+          comunicaciones: 90,
+          fiabilidad: 95.44,
+          coherencia: 86.52
+        },
+        incidents: 6,
+        tag: "GES300400011N00004",
+        señalesSubsector: [
+            "3004_CONT_P24UA624595N_CONTADOR",
+            "3004_CONT_P24UA624601U_CONTADOR",
+            "GES300400227N00001"
+        ]
+      },
+      {
+        id: '3004_01_01_03',
+        name: 'Molino',
+        date: new Date('2025-01-30'),
+        volSector: '170 m³',
+        volAbonados: '143 m³',
+        anr: '28 m³',
+        percentage: '83.82%',
+        stats: {
+          comunicaciones: 90,
+          fiabilidad: 95.44,
+          coherencia: 77.78
+        },
+        incidents: 3
+      },
+      {
+        id: '3004_01_01_03',
+        name: 'Molino',
+        date: new Date('2025-01-30'),
+        volSector: '170 m³',
+        volAbonados: '143 m³',
+        anr: '28 m³',
+        percentage: '83.82%',
+        stats: {
+          comunicaciones: 90,
+          fiabilidad: 95.44,
+          coherencia: 77.78
+        },
+        incidents: 3
+      },
+      {
+        id: '3004_01_01_03',
+        name: 'Molino',
+        date: new Date('2025-01-30'),
+        volSector: '170 m³',
+        volAbonados: '143 m³',
+        anr: '28 m³',
+        percentage: '83.82%',
+        stats: {
+          comunicaciones: 90,
+          fiabilidad: 95.44,
+          coherencia: 77.78
+        },
+        incidents: 3
+      },
+      {
+        id: '3004_01_01_03',
+        name: 'Molino',
+        date: new Date('2025-01-30'),
+        volSector: '170 m³',
+        volAbonados: '143 m³',
+        anr: '28 m³',
+        percentage: '83.82%',
+        stats: {
+          comunicaciones: 90,
+          fiabilidad: 95.44,
+          coherencia: 77.78
+        },
+        incidents: 3
+      },
+      {
+        id: '3004_01_01_03',
+        name: 'Molino',
+        date: new Date('2025-01-30'),
+        volSector: '170 m³',
+        volAbonados: '143 m³',
+        anr: '28 m³',
+        percentage: '83.82%',
+        stats: {
+          comunicaciones: 90,
+          fiabilidad: 95.44,
+          coherencia: 77.78
+        },
+        incidents: 3
+      },
+      {
+        id: '3004_01_01_03',
+        name: 'Molino',
+        date: new Date('2025-01-30'),
+        volSector: '170 m³',
+        volAbonados: '143 m³',
+        anr: '28 m³',
+        percentage: '83.82%',
+        stats: {
+          comunicaciones: 90,
+          fiabilidad: 95.44,
+          coherencia: 77.78
+        },
+        incidents: 3
+      },
+      // Puedes agregar más sectores según necesites...
+    ];
+
+    function formatDate(date) {
+      return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function createSectorCard(sector) {
+      const template = document.getElementById('sector-template');
+      const card = template.content.cloneNode(true);
+      
+      card.querySelector('.sector-id').textContent = `${sector.id} ${sector.name}`;
+      card.querySelector('.sector-date').textContent = formatDate(sector.date);
+      card.querySelector('.vol-sector').textContent = sector.volSector;
+      card.querySelector('.vol-abonados').textContent = sector.volAbonados;
+      card.querySelector('.anr').textContent = sector.anr;
+      card.querySelector('.percentage').textContent = sector.percentage;
+      
+      // Configura las barras de estado y sus valores
+      card.querySelector('[data-type="comunicaciones"]').style.width = `${sector.stats.comunicaciones}%`;
+      card.querySelector('[data-type="fiabilidad"]').style.width = `${sector.stats.fiabilidad}%`;
+      card.querySelector('[data-type="coherencia"]').style.width = `${sector.stats.coherencia}%`;
+      
+      card.querySelector('.comunicaciones-value').textContent = `${sector.stats.comunicaciones}%`;
+      card.querySelector('.fiabilidad-value').textContent = `${sector.stats.fiabilidad}%`;
+      card.querySelector('.coherencia-value').textContent = `${sector.stats.coherencia}%`;
+      
+      card.querySelector('.incidents').textContent = sector.incidents;
+      
+      return card;
+    }
+
+    function initializeDashboard() {
+      const container = document.getElementById('sectors-container');
+      sectors.forEach(sector => {
+        container.appendChild(createSectorCard(sector));
+      });
+    }
+
+    function changeDate(button, direction) {
+      const dateElement = button.parentNode.querySelector('.sector-date');
+      const parts = dateElement.textContent.split('/');
+      const currentDate = new Date(parts[2], parts[1] - 1, parts[0]);
+      currentDate.setDate(currentDate.getDate() + direction);
+      dateElement.textContent = formatDate(currentDate);
+    }
+
+    // Función que solicita la información histórica para un sector dado y una fecha de referencia
+    // Función que solicita la información histórica para un sector dado y una fecha de referencia
+function loadHistoricDataForSector(sector, referenceDate,token) {
+  // Calculamos el día anterior a la fecha de referencia
+  const previousDay = new Date(referenceDate);
+  previousDay.setDate(previousDay.getDate() - 1);
+
+  // Definimos el inicio y fin del día anterior en formato ISO
+  const startDate = new Date(previousDay);
+  startDate.setHours(0, 0, 0, 0);
+  const endDate = new Date(previousDay);
+  endDate.setHours(23, 59, 59, 999);
+  const startDateISO = startDate.toISOString();
+  const endDateISO = endDate.toISOString();
+
+  // Para cada señal del subsector, creamos un objeto de petición
+  const requests = sector.señalesSubsector.map(signalTag => ({
+    startDate: startDateISO,
+    endDate: endDateISO,
+    tzi: "Europe/Madrid",
+    interval: 0,
+    top: 50,
+    skip: 0,
+    prev: false,
+    next: false,
+    dataVersion: "RAW",
+    asc: false,
+    tag: signalTag.trim()
+  }));
+
+  // Se usa el endpoint de "Todos los históricos" para enviar un array de peticiones
+  fetch("https://hermes.saur.com.es/api/Historic/listHistoric", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + token
+  },
+  body: JSON.stringify(requests)
+})
+  .then(response => response.json())
+  .then(data => {
+    console.log("Datos históricos para el sector", sector.tag, data);
+    // Aquí puedes procesar y actualizar la interfaz según los datos recibidos.
+  })
+  .catch(error => {
+    console.error("Error al obtener los históricos para el sector", sector.tag, error);
+  });
+}
+
+function obtenerToken() {
+  const url = "https://authentication.gestagua.es/auth/realms/Gestagua/protocol/openid-connect/token"; // Reemplaza con la URL real para obtener el token
+  const params = new URLSearchParams();
+  params.append("grant_type", "password");
+  params.append("client_id", "hermes-app");     // Reemplaza con el client_id configurado
+  params.append("username", "cguerrero");        // Reemplaza con el usuario
+  params.append("password", "123456");       // Reemplaza con la contraseña
+
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error("Error en la petición de token");
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log("Token obtenido:", data.access_token);
+    return data.access_token; // Se asume que el token se encuentra en data.access_token
+  })
+  .catch(error => {
+    console.error("Error al obtener el token:", error);
+  });
+}
+
+// Al cargar la página, recorrer todos los sectores y solicitar los datos históricos (del día anterior)
+document.addEventListener('DOMContentLoaded', () => {
+    initializeDashboard();
+    obtenerToken().then(token => {
+        sectors.forEach(sector => {
+            loadHistoricDataForSector(sector, sector.date,token);
+        });
+    });
+});
+
+// Función para cambiar la fecha en la tarjeta de un sector y recargar sus datos históricos.
+// Se asume que la tarjeta contiene atributos data con la tag y el array de señales del subsector,
+// por ejemplo: <div class="sector-card" data-tag="GES300400011N00004" data-signals='["signal1", "signal2", ...]'>
+function changeDateAndLoadInfo(button, direction) {
+  // Se obtiene la tarjeta del sector (se asume que el botón está dentro de ella)
+  const card = button.closest('.sector-card');
+  const dateElement = card.querySelector('.sector-date');
+  
+  // Convertir la fecha mostrada (formato dd/mm/yyyy) a objeto Date
+  const parts = dateElement.textContent.split('/');
+  const currentDate = new Date(parts[2], parts[1] - 1, parts[0]);
+  
+  // Actualizar la fecha según la dirección (por ejemplo, -1 para retroceder un día, +1 para avanzar)
+  currentDate.setDate(currentDate.getDate() + direction);
+  dateElement.textContent = formatDate(currentDate);  // 'formatDate' debe formatear la fecha al formato deseado
+
+  // Recuperar los datos del sector desde atributos de la tarjeta
+  const sectorTag = card.getAttribute('data-tag');
+  const signalsSubsector = JSON.parse(card.getAttribute('data-signals'));
+
+  // Creamos un objeto sector parcial para la petición
+  const sector = {
+    tag: sectorTag,
+    señalesSubsector: signalsSubsector
+  };
+
+  // Llamamos a la función para recargar la información histórica para la nueva fecha
+  loadHistoricDataForSector(sector, currentDate,token);
+}
+
+
+    
+  </script>
+</body>
+</html>
