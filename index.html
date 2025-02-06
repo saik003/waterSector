@@ -68,7 +68,7 @@
       <div class="p-6">
         <!-- Cabecera -->
         <div class="flex flex-col items-center mb-8">
-          <h2 class="text-2xl font-bold text-gray-800 sector-id mb-4"></h2>
+          <h2 class="text-2xl text-center font-bold text-gray-800 sector-id mb-4"></h2>
           <div class="flex items-center justify-center space-x-2">
             <button class="date-nav-button text-gray-600 p-2 rounded-full" onclick="changeDate(this, -1)">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -87,11 +87,11 @@
         <!-- Cuadrícula de estadísticas -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div class="bg-white/50 rounded-lg p-3">
-            <p class="text-xs text-gray-600">Vol Sector</p>
+            <p class="text-xs text-gray-600">Vol. Sector</p>
             <p class="text-lg font-bold text-gray-800 vol-sector"></p>
           </div>
           <div class="bg-white/50 rounded-lg p-3">
-            <p class="text-xs text-gray-600">Vol Abo.</p>
+            <p class="text-xs text-gray-600">Vol. Abo.</p>
             <p class="text-lg font-bold text-gray-800 vol-abonados"></p>
           </div>
           <div class="bg-white/50 rounded-lg p-3">
@@ -160,8 +160,8 @@
     const sectors = [
       {
         id: '3004_01_01_03',
-        name: 'Los Gallos',
-        date: new Date('2025-01-30'),
+        name: 'Vidales',
+        "date": new Date(new Date().setDate(new Date().getDate() - 1)),
         // Estos valores se actualizarán con los cálculos de los históricos
         volSector: '-1 m³',
         volAbonados: '-1 m³',
@@ -183,6 +183,33 @@
             "GES300400161N00001"
           ]
       },
+      // {
+      //   id: '3004_01_01_03',
+      //   name: 'TORRE',
+      //   date: new Date(new Date().setDate(new Date().getDate() - 1)),
+      //   // Estos valores se actualizarán con los cálculos de los históricos
+      //   volSector: '-1 m³',
+      //   volAbonados: '-1 m³',
+      //   anr: '-1 m³',
+      //   percentage: '0%',
+      //   stats: {
+      //     comunicaciones: 90,
+      //     fiabilidad: 95.44,
+      //     coherencia: 86.52
+      //   },
+      //   incidents: 0,
+      //   tag: "GES300400227N00001",
+      //   señalesSubsector: [
+      //       "3004_CONT_P24IA615002K_CONTADOR",
+      //       "3004_CONT_P24IA614973W_CONTADOR",
+      //       "3004_CONT_P24UA624602V_CONTADOR",
+      //       "3004_CONT_P24UA624599R_CONTADOR",
+      //       "3004_CONT_P24IA614968Z_CONTADOR",
+      //       "3004_CONT_P24UA624738K_CONTADOR",
+      //       "3004_CONT_P24UA624735H_CONTADOR"
+      //     ]
+      // },
+      
       // Puedes agregar más sectores según necesites...
     ];
 
@@ -222,193 +249,266 @@
       });
     }
 
+      
+    // Función que actualiza la fecha mostrada en la tarjeta y recarga sus datos históricos
     function changeDate(button, direction) {
-      const dateElement = button.parentNode.querySelector('.sector-date');
+      // Obtenemos la tarjeta (card) de la que se pulsó el botón.
+      const card = button.closest('.glass-card');
+
+      // Actualizamos la fecha mostrada en esa tarjeta.
+      const dateElement = card.querySelector('.sector-date');
       const parts = dateElement.textContent.split('/');
       const currentDate = new Date(parts[2], parts[1] - 1, parts[0]);
       currentDate.setDate(currentDate.getDate() + direction);
       dateElement.textContent = formatDate(currentDate);
+
+      // Extraemos el tag del sector desde el contenido de .sector-id.
+      // Se asume que el tag está entre paréntesis, por ejemplo:
+      // "3004_01_01_03 Los Gallos (GES300400011N00004)"
+      const sectorIdText = card.querySelector('.sector-id').textContent;
+      const tagMatch = sectorIdText.match(/\(([^)]+)\)/);
+      if (!tagMatch) {
+        console.warn("No se encontró el tag del sector en el texto:", sectorIdText);
+        return;
+      }
+      const sectorTag = tagMatch[1];
+
+      // Buscamos el sector en la lista global 'sectors'
+      const sector = sectors.find(s => s.tag.trim() === sectorTag.trim());
+      if (sector) {
+        // Obtenemos un token y recargamos los datos históricos para la nueva fecha,
+        // pasando también la referencia a la tarjeta (card) para actualizarla de forma individual.
+        obtenerToken().then(token => {
+          loadHistoricDataForSector(sector, currentDate, token, card);
+        });
+      } else {
+        console.warn("No se encontró el sector para el tag:", sectorTag);
+      }
     }
+
+/**
+ * Calcula el porcentaje de comunicaciones para las señales del subsector,
+ * usando como fecha de análisis la fecha proporcionada menos un día.
+ * 
+ * @param {Array} historics - Array de objetos históricos devueltos por el servicio.
+ * @param {Array} signalsSubsector - Array con los tags de las señales del subsector.
+ * @param {Date} selectedDate - Objeto Date que representa la fecha seleccionada en la tarjeta.
+ * @returns {number} Porcentaje de señales que han comunicado.
+ */
+  function calculateComunicacionesPercentage(historics, signalsSubsector, selectedDate) {
+  // La fecha de análisis es un día antes de la fecha seleccionada
+  const analysisDate = new Date(selectedDate);
+  analysisDate.setDate(analysisDate.getDate());
+  analysisDate.setHours(0, 0, 0, 0);
+
+  const analysisDateEnd = new Date(analysisDate);
+  analysisDateEnd.setHours(23, 59, 59, 999);
+
+  let communicatedCount = 0;
+
+  // Para cada señal del subsector, verificamos si existe al menos un dato dentro del rango del día de análisis
+  signalsSubsector.forEach(signalTag => {
+    // Buscamos en los históricos una entrada que corresponda a esta señal
+    const hasData = historics.some(entry => {
+      // Comprobar que el tag coincide
+      if (entry.data.tag.trim() !== signalTag.trim()) return false;
+
+      // Si no hay datos, se descarta
+      if (!entry.data.data.ms || entry.data.data.ms.length === 0) return false;
+
+      // Usamos el primer timestamp para determinar la fecha del registro (se puede ajustar si es necesario)
+      const entryDate = new Date(entry.data.data.ms[0]);
+      return (entryDate >= analysisDate && entryDate <= analysisDateEnd);
+    });
+
+    if (hasData) {
+      communicatedCount++;
+    }
+  });
+
+  return signalsSubsector.length > 0 ? (communicatedCount / signalsSubsector.length) * 100 : 0;
+}
 
     /**
-     * Función que solicita los históricos para el sector usando dos rangos:
-     * uno para el día de la fecha de referencia (día "actual") y otro para el día anterior.
-     * A partir de las lecturas se calcula:
-     *  - vol_sector: diferencia del valor (cercano a las 00:00) de la etiqueta sector.
-     *  - vol_abonados: diferencia de la suma de valores (cercanos a las 00:00) de todas las señales del subsector.
-     *  - anr: diferencia de los dos anteriores.
-     *  - eficiencia: (vol_abonados/vol_sector)*100.
-     */
-    function loadHistoricDataForSector(sector, referenceDate, token) {
-      // Definimos el rango para el día actual (la fecha de referencia) y el anterior
-      let currentDay = new Date(referenceDate);
-      currentDay.setHours(0,0,0,0);
-      let currentDayEnd = new Date(currentDay);
-      currentDayEnd.setHours(23,59,59,999);
+ * Solicita los históricos para el sector usando dos rangos (día actual y día anterior) y actualiza
+ * los valores de la tarjeta.
+ * 
+ * @param {Object} sector Objeto con la información del sector.
+ * @param {Date} referenceDate Fecha de referencia para obtener los históricos.
+ * @param {String} token Token de autorización.
+ * @param {HTMLElement} [cardElement] (Opcional) Elemento de la tarjeta a actualizar.
+ */
+ function loadHistoricDataForSector(sector, referenceDate, token, cardElement) {
+  // 1. Calcular la fecha "máxima" (día actual) y el día anterior,
+  //    ambos fijados a la medianoche (00:00)
+  let currentDay = new Date(referenceDate);
+  currentDay.setHours(0, 0, 0, 0);
+  let previousDay = new Date(referenceDate);
+  previousDay.setDate(previousDay.getDate() - 1);
+  previousDay.setHours(0, 0, 0, 0);
 
-      let previousDay = new Date(referenceDate);
-      previousDay.setDate(previousDay.getDate()-1);
-      previousDay.setHours(0,0,0,0);
-      let previousDayEnd = new Date(previousDay);
-      previousDayEnd.setHours(23,59,59,999);
+  // Definimos un único rango que va desde el día anterior a las 00:00 hasta el día actual a las 00:00.
+  const startISO = previousDay.toISOString();
+  const endISO = currentDay.toISOString();
 
-      const currentStartISO = currentDay.toISOString();
-      const currentEndISO = currentDayEnd.toISOString();
-      const previousStartISO = previousDay.toISOString();
-      const previousEndISO = previousDayEnd.toISOString();
+  // 2. Generamos la petición para cada etiqueta (una por cada señal del subsector y una para la etiqueta del sector).
+  //    Para la etiqueta del sector agregamos el parámetro 'sn'
+  const requests = [];
 
-      // Generamos las peticiones para cada etiqueta: cada señal se consulta para el día actual y el anterior.
-      const requests = [];
+  // Para cada señal del subsector:
+  sector.señalesSubsector.forEach(signalTag => {
+    requests.push({
+      startDate: startISO,
+      endDate: endISO,
+      tzi: "Europe/Madrid",
+      interval: 0,
+      top: 672,//una semana a datos de 15 min
+      skip: 0,
+      prev: false,
+      next: false,
+      dataVersion: "RAW",
+      asc: false,
+      tag: signalTag.trim()
+    });
+  });
 
-      // Para cada señal del subsector:
-      sector.señalesSubsector.forEach(signalTag => {
-        // Día actual
-        requests.push({
-          startDate: currentStartISO,
-          endDate: currentEndISO,
-          tzi: "Europe/Madrid",
-          interval: 0,
-          top: 50,
-          skip: 0,
-          prev: false,
-          next: false,
-          dataVersion: "RAW",
-          asc: false,
-          tag: signalTag.trim()
-        });
-        // Día anterior
-        requests.push({
-          startDate: previousStartISO,
-          endDate: previousEndISO,
-          tzi: "Europe/Madrid",
-          interval: 0,
-          top: 50,
-          skip: 0,
-          prev: false,
-          next: false,
-          dataVersion: "RAW",
-          asc: false,
-          tag: signalTag.trim()
-        });
-      });
-      // Para la etiqueta del sector:
-      requests.push({
-        startDate: currentStartISO,
-        endDate: currentEndISO,
-        tzi: "Europe/Madrid",
-        interval: 0,
-        top: 50,
-        skip: 0,
-        prev: false,
-        next: false,
-        dataVersion: "RAW",
-        asc: false,
-        tag: sector.tag.trim()
-      });
-      requests.push({
-        startDate: previousStartISO,
-        endDate: previousEndISO,
-        tzi: "Europe/Madrid",
-        interval: 0,
-        top: 50,
-        skip: 0,
-        prev: false,
-        next: false,
-        dataVersion: "RAW",
-        asc: false,
-        tag: sector.tag.trim()
-      });
+  // Para la etiqueta del sector (agregamos el parámetro 'sn' para que se incluya en la respuesta)
+  requests.push({
+    startDate: startISO,
+    endDate: endISO,
+    tzi: "Europe/Madrid",
+    interval: 0,
+    top: 672,
+    skip: 0,
+    prev: false,
+    next: false,
+    dataVersion: "RAW",
+    asc: false,
+    tag: sector.tag.trim()
+  });
 
-      fetch("https://hermesmanager.saur.com.es/api/Historic/listHistoric", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + token
-        },
-        body: JSON.stringify(requests)
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log("Datos históricos para el sector", sector.tag, data);
-        // Variables para guardar los valores:
-        let currentSectorValue = null;
-        let previousSectorValue = null;
-        let currentAbonadoSum = 0;
-        let previousAbonadoSum = 0;
+  // 3. Realizar la llamada al servicio con todas las peticiones en una sola llamada.
+  fetch("https://hermesmanager.saur.com.es/api/Historic/listHistoric", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify(requests)
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log("Datos históricos para el sector", sector.tag, data);
+      
+      // Variables para guardar los valores obtenidos para el sector y las señales abonadas.
+      let currentSectorValue = null;
+      let previousSectorValue = null;
+      let currentAbonadoSum = 0;
+      let previousAbonadoSum = 0;
 
-        // Función auxiliar para obtener el valor de la lectura más cercana a la medianoche (00:00)
-        function getNearestMidnightValue(historicEntry, targetDate) {
-          if (!historicEntry.data.data || !historicEntry.data.data.ms || historicEntry.data.data.ms.length === 0) return null;
-          const targetMidnight = new Date(targetDate);
-          targetMidnight.setHours(0,0,0,0);
-          let nearest = null;
-          let minDiff = Infinity;
-          historicEntry.data.data.ms.forEach((msValue, index) => {
-            const readingDate = new Date(msValue);
-            const diff = Math.abs(readingDate - targetMidnight);
-            if(diff < minDiff) {
-              minDiff = diff;
-              nearest = historicEntry.data.data.vs["0"][index];
-            }
-          });
-          return nearest;
-        }
-
-        // Procesamos cada entrada devuelta:
-        data.historics.forEach(entry => {
-          const tag = entry.data.tag;
-          if(!entry.data.data.ms || entry.data.data.ms.length === 0) return;
-          // Usamos el primer timestamp para determinar a qué día corresponde la entrada
-          const entryDate = new Date(entry.data.data.ms[0]);
-          // Si la entrada corresponde al día actual:
-          if(entryDate >= currentDay && entryDate <= currentDayEnd) {
-            const value = getNearestMidnightValue(entry, currentDay);
-            if(tag === sector.tag.trim()) {
-              currentSectorValue = value;
-            } else if(sector.señalesSubsector.includes(tag)) {
-              currentAbonadoSum += value;
-            }
-          } 
-          // Si la entrada corresponde al día anterior:
-          else if(entryDate >= previousDay && entryDate <= previousDayEnd) {
-            const value = getNearestMidnightValue(entry, previousDay);
-            if(tag === sector.tag.trim()) {
-              previousSectorValue = value;
-            } else if(sector.señalesSubsector.includes(tag)) {
-              previousAbonadoSum += value;
-            }
+      // Función auxiliar para obtener, de un historicEntry, el valor cuya lectura esté más
+      // cerca de la medianoche del día indicado (targetDate).
+      function getNearestValue(historicEntry, targetDate) {
+        if (
+          !historicEntry.data.data ||
+          !historicEntry.data.data.ms ||
+          historicEntry.data.data.ms.length === 0
+        )
+          return null;
+        const target = new Date(targetDate);
+        target.setHours(0, 0, 0, 0);
+        let nearest = null;
+        let minDiff = Infinity;
+        historicEntry.data.data.ms.forEach((msValue, index) => {
+          const readingDate = new Date(msValue);
+          const diff = Math.abs(readingDate - target);
+          if (diff < minDiff) {
+            minDiff = diff;
+            nearest = historicEntry.data.data.vs["0"][index];
           }
         });
+        return nearest;
+      }
 
-        // Si se encontraron ambos valores, se realizan los cálculos:
-        if(currentSectorValue != null && previousSectorValue != null) {
-          const volSectorCalc = currentSectorValue - previousSectorValue;
-          const volAbonadosCalc = currentAbonadoSum - previousAbonadoSum;
-          const anrCalc = volSectorCalc - volAbonadosCalc;
-          // Se asume que la eficiencia se calcula como (vol_abonados / vol_sector) * 100
-          let efficiencyCalc = volSectorCalc !== 0 ? (volAbonadosCalc / volSectorCalc) * 100 : 0;
+      // 4. Procesar cada entrada devuelta. Cada objeto de la respuesta corresponde a una petición.
+      //    Se obtiene el valor para el día anterior (target = previousDay) y para el día actual (target = currentDay)
+      data.historics.forEach(entry => {
+        const tag = entry.data.tag;
+        // Obtenemos el valor más cercano a la medianoche para ambos días:
+        const valuePrevious = getNearestValue(entry, previousDay);
+        const valueCurrent = getNearestValue(entry, currentDay);
+        if (valuePrevious === null || valueCurrent === null) return; // Si falta alguno, lo omitimos
 
-          // Actualizamos los valores de la tarjeta correspondiente:
-          // Se busca la tarjeta cuyo elemento .sector-id incluya el tag del sector.
+        if (tag === sector.tag.trim()) {
+          // Para la etiqueta del sector
+          previousSectorValue = valuePrevious;
+          currentSectorValue = valueCurrent;
+        } else if (sector.señalesSubsector.includes(tag)) {
+          // Para cada señal del subsector se acumulan sus valores
+          previousAbonadoSum += valuePrevious;
+          currentAbonadoSum += valueCurrent;
+        }
+      });
+
+      // Si usas una función para calcular el porcentaje de comunicaciones, se puede invocar aquí.
+      const communicationsPercent = calculateComunicacionesPercentage(
+        data.historics,
+        sector.señalesSubsector,
+        referenceDate
+      );
+
+      // 5. Realizar los cálculos si se tienen los valores necesarios.
+      if (currentSectorValue != null && previousSectorValue != null) {
+        const volSectorCalc = currentSectorValue - previousSectorValue;
+        const volAbonadosCalc = currentAbonadoSum - previousAbonadoSum;
+        const anrCalc = volSectorCalc - volAbonadosCalc;
+        const efficiencyCalc =
+          volSectorCalc !== 0 ? (volAbonadosCalc / volSectorCalc) * 100 : 0;
+
+        // Actualizar la tarjeta (ya sea la pasada como parámetro o todas las que correspondan)
+        if (cardElement) {
+          cardElement.querySelector('.vol-sector').textContent =
+            volSectorCalc.toFixed(2) + " m³";
+          cardElement.querySelector('.vol-abonados').textContent =
+            volAbonadosCalc.toFixed(2) + " m³";
+          cardElement.querySelector('.anr').textContent =
+            anrCalc.toFixed(2) + " m³";
+          cardElement.querySelector('.percentage').textContent =
+            efficiencyCalc.toFixed(2) + " %";
+          cardElement.querySelector('.comunicaciones-value').textContent =
+            communicationsPercent.toFixed(2) + " %";
+          cardElement.querySelector('[data-type="comunicaciones"]').style.width =
+            communicationsPercent.toFixed(2) + "%";
+        } else {
           const cards = document.querySelectorAll('.glass-card');
           cards.forEach(card => {
-            if(card.querySelector('.sector-id').textContent.indexOf(sector.tag) !== -1) {
-              card.querySelector('.vol-sector').textContent = volSectorCalc.toFixed(2) + " m³";
-              card.querySelector('.vol-abonados').textContent = volAbonadosCalc.toFixed(2) + " m³";
-              card.querySelector('.anr').textContent = anrCalc.toFixed(2) + " m³";
-              card.querySelector('.percentage').textContent = efficiencyCalc.toFixed(2) + " %";
+            if (card.querySelector('.sector-id').textContent.indexOf(sector.tag) !== -1) {
+              card.querySelector('.vol-sector').textContent =
+                volSectorCalc.toFixed(2) + " m³";
+              card.querySelector('.vol-abonados').textContent =
+                volAbonadosCalc.toFixed(2) + " m³";
+              card.querySelector('.anr').textContent =
+                anrCalc.toFixed(2) + " m³";
+              card.querySelector('.percentage').textContent =
+                efficiencyCalc.toFixed(2) + " %";
+              card.querySelector('.comunicaciones-value').textContent =
+                communicationsPercent.toFixed(2) + " %";
+              card.querySelector('[data-type="comunicaciones"]').style.width =
+                communicationsPercent.toFixed(2) + "%";
             }
           });
-        } else {
-          console.warn("No se pudieron obtener los valores completos para el sector", sector.tag);
         }
-      })
-      .catch(error => {
-        console.error("Error al obtener los históricos para el sector", sector.tag, error);
-      });
-    }
+      } else {
+        console.warn("No se pudieron obtener los valores completos para el sector", sector.tag);
+      }
+    })
+    .catch(error => {
+      console.error("Error al obtener los históricos para el sector", sector.tag, error);
+    });
+}
 
-    function obtenerToken() {
+
+  function obtenerToken() {
       const url = "https://authentication.gestagua.es/auth/realms/Gestagua/protocol/openid-connect/token"; // Reemplaza con la URL real para obtener el token
       const params = new URLSearchParams();
       params.append("grant_type", "password");
@@ -438,8 +538,8 @@
       });
     }
 
-    // Al cargar la página, se inicializa el dashboard y se solicitan los históricos para cada sector
-    document.addEventListener('DOMContentLoaded', () => {
+// Al cargar la página, se inicializa el dashboard y se solicitan los históricos para cada sector
+document.addEventListener('DOMContentLoaded', () => {
         initializeDashboard();
         obtenerToken().then(token => {
             sectors.forEach(sector => {
@@ -448,25 +548,7 @@
         });
     });
 
-    // La función changeDateAndLoadInfo es similar a changeDate pero además recarga la información histórica.
-    function changeDateAndLoadInfo(button, direction) {
-      const card = button.closest('.sector-card');
-      const dateElement = card.querySelector('.sector-date');
-      const parts = dateElement.textContent.split('/');
-      const currentDate = new Date(parts[2], parts[1] - 1, parts[0]);
-      currentDate.setDate(currentDate.getDate() + direction);
-      dateElement.textContent = formatDate(currentDate);
-
-      const sectorTag = card.querySelector('.sector-id').textContent.split(' ')[1];
-      // Se asume que el sector se identifica por su tag
-      const sector = sectors.find(s => s.tag === sectorTag);
-      if(sector) {
-        obtenerToken().then(token => {
-          loadHistoricDataForSector(sector, currentDate, token);
-        });
-      }
-    }
-    
+  
   </script>
 </body>
 </html>
