@@ -329,6 +329,174 @@
   return signalsSubsector.length > 0 ? (communicatedCount / signalsSubsector.length) * 100 : 0;
 }
 
+function loadHistoricDataForSector(sector, referenceDate, token) {
+  // 1. Calcular el rango de fechas:
+  // - startDate: 3 días antes de referenceDate
+  // - endDate: referenceDate + 1 hora
+  let startDate = new Date(referenceDate);
+  startDate.setDate(startDate.getDate() - 3);
+  startDate.setHours(0,0,0,0);
+ 
+
+  let endDate = new Date(referenceDate);
+  endDate.setHours(23,59,59,999);
+  endDate.setHours(endDate.getHours() + 2);
+
+  // Convertir a formato ISO (para la petición)
+  const startISO = startDate.toISOString();
+  const endISO = endDate.toISOString();
+
+  // 2. Preparar las peticiones para cada tag:
+  const requests = [];
+
+  // Para cada tag del subsector:
+  sector.señalesSubsector.forEach(signalTag => {
+    requests.push({
+      startDate: startISO,
+      endDate: endISO,
+      tzi: "Europe/Madrid",
+      interval: 0,
+      top: 700,
+      skip: 0,
+      prev: false,
+      next: false,
+      dataVersion: "RAW",
+      asc: false,
+      tag: signalTag.trim()
+    });
+  });
+
+  // Para el tag del sector:
+  requests.push({
+    startDate: startISO,
+    endDate: endISO,
+    tzi: "Europe/Madrid",
+    interval: 0,
+    top: 700,
+    skip: 0,
+    prev: false,
+    next: false,
+    dataVersion: "RAW",
+    asc: false,
+    tag: sector.tag.trim()
+  });
+
+  // 3. Realizar la petición al endpoint con todas las solicitudes:
+  fetch("https://hermesmanager.saur.com.es/api/Historic/listHistoric", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify(requests)
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log("Datos históricos para el sector", sector.tag, data);
+
+      // Buscamos en el arreglo 'historics' la entrada cuyo tag coincida con el del sector
+      const sectorHistoric = data.historics.find(entry => entry.data.tag.trim() === sector.tag.trim());
+      if (sectorHistoric) {
+
+       // 1. Obtener el valor (y la hora real encontrada) a la hora 23 del día de referencia
+      const refResult = getNearestTargetValue(sectorHistoric, referenceDate, 23);
+    
+    // 2. Calcular el día anterior y obtener su valor a la hora 23 (o lo más cercano)
+    const previousDate = new Date(referenceDate);
+    previousDate.setDate(previousDate.getDate() - 1);
+    const prevResult = getNearestTargetValue(sectorHistoric, previousDate, 23);
+    
+    if (refResult && prevResult && refResult.value !== null && prevResult.value !== null) {
+      // Calcular vol-sector como la diferencia entre el valor del día de referencia y el del día anterior
+      const volSectorCalc = refResult.value - prevResult.value;
+      
+      // Se puede extraer la hora elegida (que debería ser 23 o la más cercana) para usarla en otras búsquedas
+      const chosenHour = refResult.chosenTime.getHours(); // Este valor se usará para mantener consistencia en todas las señales
+       // La hora capturada del sector padre (puede ser 22, 23, etc.) se usará para las señales hijas
+       const capturedHour = refResult.capturedHour;
+      // Actualizamos la tarjeta correspondiente al sector
+      const cards = document.querySelectorAll('.glass-card');
+      cards.forEach(card => {
+        if (card.querySelector('.sector-id').textContent.indexOf(sector.tag) !== -1) {
+          card.querySelector('.vol-sector').textContent = volSectorCalc.toFixed(2) + " m³";
+          // Opcional: se puede mostrar o guardar la hora elegida (chosenHour) para futuras consultas
+        }
+      });
+      // Procesar las señales de los subsectores
+      let volAbonadosCalc = 0;
+      sector.señalesSubsector.forEach(signalTag => {
+        // Buscar en data.historics la entrada correspondiente a la señal hija
+        const signalHistoric = data.historics.find(entry => entry.data.tag.trim() === signalTag.trim());
+        if (signalHistoric) {
+          // Obtener el valor para el día de referencia usando la capturedHour encontrada
+          const childRefResult = getNearestTargetValue(signalHistoric, referenceDate, capturedHour);
+          // Obtener el valor para el día anterior
+          const childPrevResult = getNearestTargetValue(signalHistoric, previousDate, capturedHour);
+          
+          if (childRefResult && childPrevResult && childRefResult.value !== null && childPrevResult.value !== null) {
+            // Se suma la diferencia (día de referencia - día anterior) para la señal
+            volAbonadosCalc += (childRefResult.value - childPrevResult.value);
+            
+          } else {
+            console.warn("No se pudieron obtener valores para la señal", signalTag);
+          }
+        } else {
+          console.warn("No se encontró la data histórica para la señal", signalTag);
+        }
+      });
+
+      // Actualizar la tarjeta con el valor calculado para vol. abonados
+      cards.forEach(card => {
+        if (card.querySelector('.sector-id').textContent.indexOf(sector.tag) !== -1) {
+          card.querySelector('.vol-abonados').textContent = volAbonadosCalc.toFixed(2) + " m³";
+        }
+      });
+
+    } else {
+      console.warn("No se pudieron obtener los valores cercanos a las 23 para el sector", sector.tag);
+    }
+  } else {
+    console.warn("No se encontró la data histórica para el tag del sector", sector.tag);
+  }
+})
+}
+function getNearestTargetValue(historicEntry, targetDate, targetHour = 23) {
+  if (
+    !historicEntry.data.data ||
+    !historicEntry.data.data.ms ||
+    historicEntry.data.data.ms.length === 0
+  ) return null;
+  
+  // Construir la fecha objetivo en UTC usando el año, mes y día de targetDate
+  const year = targetDate.getUTCFullYear();
+  const month = targetDate.getUTCMonth();
+  const day = targetDate.getUTCDate();
+  // targetTime se crea en UTC con la hora indicada (por defecto, 23:00)
+  const targetTime = new Date(Date.UTC(year, month, day, targetHour, 0, 0, 0));
+  
+  let nearest = null;
+  let minDiff = Infinity;
+  let chosenTimestamp = null;
+  
+  // Recorrer cada timestamp (la cadena tiene "Z", por lo que se interpreta en UTC)
+  historicEntry.data.data.ms.forEach((timestamp, index) => {
+    const readingDate = new Date(timestamp); 
+    const diff = Math.abs(readingDate.getTime() - targetTime.getTime());
+    if (diff < minDiff) {
+      minDiff = diff;
+      nearest = historicEntry.data.data.vs["0"][index];
+      chosenTimestamp = readingDate;
+    }
+  });
+  
+  // Se extrae la hora capturada en UTC del timestamp encontrado
+  const capturedHour = chosenTimestamp ? chosenTimestamp.getUTCHours() : null;
+  
+  return { value: nearest, chosenTime: chosenTimestamp, capturedHour: capturedHour };
+}
+
+
+
     /**
  * Solicita los históricos para el sector usando dos rangos (día actual y día anterior) y actualiza
  * los valores de la tarjeta.
@@ -338,7 +506,7 @@
  * @param {String} token Token de autorización.
  * @param {HTMLElement} [cardElement] (Opcional) Elemento de la tarjeta a actualizar.
  */
- function loadHistoricDataForSector(sector, referenceDate, token, cardElement) {
+ function loadHistoricDataForSector3(sector, referenceDate, token, cardElement) {
   // 1. Calcular la fecha "máxima" (día actual) y el día anterior,
   //    ambos fijados a la medianoche (00:00)
   let currentDay = new Date(referenceDate);

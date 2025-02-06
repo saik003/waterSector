@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modern Water Sectors Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .glass-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .status-bar {
+      height: 8px;
+      transition: all 0.3s ease;
+      border-radius: 4px;
+    }
+    
+    .gradient-bg {
+        background: linear-gradient(135deg, #9dd1e2 0%, #90EE90 100%);
+    }
+    
+    .card-hover {
+      transition: all 0.3s ease;
+    }
+    
+    .card-hover:hover {
+      transform: translateY(-5px);
+    }
+    
+    .icon-container svg {
+      transition: all 0.3s ease;
+    }
+    
+    .icon-container:hover svg {
+      transform: scale(1.1);
+      color: #667eea;
+    }
+    
+    .date-nav-button {
+      transition: all 0.2s ease;
+    }
+    
+    .date-nav-button:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body class="min-h-screen gradient-bg p-4">
+  <!-- Utilizamos un contenedor de ancho completo -->
+  <div class="w-full">
+    <h1 class="text-4xl font-bold text-white mb-12 text-center">
+      Water Sectors Monitor
+    </h1>
+    
+    <!-- Contenedor Grid responsivo para los sectores -->
+    <div id="sectors-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <!-- Las tarjetas se insertarán aquí mediante JavaScript -->
+    </div>
+  </div>
+
+  <!-- Plantilla para la tarjeta de sector -->
+  <template id="sector-template">
+    <div class="glass-card card-hover rounded-2xl shadow-xl overflow-hidden">
+      <div class="p-6">
+        <!-- Cabecera -->
+        <div class="flex flex-col items-center mb-8">
+          <h2 class="text-2xl font-bold text-gray-800 sector-id mb-4"></h2>
+          <div class="flex items-center justify-center space-x-2">
+            <button class="date-nav-button text-gray-600 p-2 rounded-full" onclick="changeDate(this, -1)">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <p class="text-lg text-gray-600 sector-date font-medium"></p>
+            <button class="date-nav-button text-gray-600 p-2 rounded-full" onclick="changeDate(this, 1)">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Cuadrícula de estadísticas -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div class="bg-white/50 rounded-lg p-3">
+            <p class="text-xs text-gray-600">Vol Sector</p>
+            <p class="text-lg font-bold text-gray-800 vol-sector"></p>
+          </div>
+          <div class="bg-white/50 rounded-lg p-3">
+            <p class="text-xs text-gray-600">Vol Abo.</p>
+            <p class="text-lg font-bold text-gray-800 vol-abonados"></p>
+          </div>
+          <div class="bg-white/50 rounded-lg p-3">
+            <p class="text-xs text-gray-600">ANR</p>
+            <p class="text-lg font-bold text-gray-800 anr"></p>
+          </div>
+          <div class="bg-white/50 rounded-lg p-3">
+            <p class="text-xs text-gray-600">Eficiencia</p>
+            <p class="text-lg font-bold text-gray-800 percentage"></p>
+          </div>
+        </div>
+
+        <!-- Barras de estado -->
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Comunicaciones</span>
+              <span class="text-sm font-semibold comunicaciones-value"></span>
+            </div>
+            <div class="bg-gray-200 rounded-full">
+              <div class="status-bar bg-green-500" data-type="comunicaciones"></div>
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Fiabilidad</span>
+              <span class="text-sm font-semibold fiabilidad-value"></span>
+            </div>
+            <div class="bg-gray-200 rounded-full">
+              <div class="status-bar bg-blue-500" data-type="fiabilidad"></div>
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600">Coherencia</span>
+              <span class="text-sm font-semibold coherencia-value"></span>
+            </div>
+            <div class="bg-gray-200 rounded-full">
+              <div class="status-bar bg-purple-500" data-type="coherencia"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Incidencias -->
+        <div class="mt-6 flex items-center justify-between bg-red-50 rounded-lg p-4">
+          <span class="text-sm text-red-700">Alarmas/Incidencias</span>
+          <span class="incidents px-3 py-1 bg-red-200 text-red-800 rounded-full text-sm font-semibold"></span>
+        </div>
+
+        <!-- Íconos -->
+        <div class="flex justify-center gap-8 mt-6 icon-container">
+          <svg class="w-6 h-6 text-gray-600 cursor-pointer" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M3,3H21V21H3V3M7,7V17H10V7H7M11,7V17H14V7H11M15,7V17H18V7H15Z"/>
+          </svg>
+          <svg class="w-6 h-6 text-gray-600 cursor-pointer" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    const sectors = [
+      {
+        id: '3004_01_01_03',
+        name: 'Los Gallos',
+        date: new Date('2025-01-30'),
+        // Estos valores se actualizarán con los cálculos de los históricos
+        volSector: '-1 m³',
+        volAbonados: '-1 m³',
+        anr: '-1 m³',
+        percentage: '0%',
+        stats: {
+          comunicaciones: 90,
+          fiabilidad: 95.44,
+          coherencia: 86.52
+        },
+        incidents: 0,
+        tag: "GES300400011N00004",
+        señalesSubsector: [
+            "3004_CONT_P24UA624595N_CONTADOR",
+            "3004_CONT_P24UA624601U_CONTADOR",
+            "3004_CONT_P24IA615026S_CONTADOR",
+            "3004_CONT_P24UA624732E_CONTADOR",
+            "GES300400227N00001",
+            "GES300400161N00001"
+          ]
+      },
+      // Puedes agregar más sectores según necesites...
+    ];
+
+    function formatDate(date) {
+      return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function createSectorCard(sector) {
+      const template = document.getElementById('sector-template');
+      const card = template.content.cloneNode(true);
+      
+      card.querySelector('.sector-id').textContent = `${sector.id} ${sector.name} (${sector.tag})`;
+      card.querySelector('.sector-date').textContent = formatDate(sector.date);
+      card.querySelector('.vol-sector').textContent = sector.volSector;
+      card.querySelector('.vol-abonados').textContent = sector.volAbonados;
+      card.querySelector('.anr').textContent = sector.anr;
+      card.querySelector('.percentage').textContent = sector.percentage;
+      
+      // Configura las barras de estado y sus valores
+      card.querySelector('[data-type="comunicaciones"]').style.width = `${sector.stats.comunicaciones}%`;
+      card.querySelector('[data-type="fiabilidad"]').style.width = `${sector.stats.fiabilidad}%`;
+      card.querySelector('[data-type="coherencia"]').style.width = `${sector.stats.coherencia}%`;
+      
+      card.querySelector('.comunicaciones-value').textContent = `${sector.stats.comunicaciones}%`;
+      card.querySelector('.fiabilidad-value').textContent = `${sector.stats.fiabilidad}%`;
+      card.querySelector('.coherencia-value').textContent = `${sector.stats.coherencia}%`;
+      
+      card.querySelector('.incidents').textContent = sector.incidents;
+      
+      return card;
+    }
+
+    function initializeDashboard() {
+      const container = document.getElementById('sectors-container');
+      sectors.forEach(sector => {
+        container.appendChild(createSectorCard(sector));
+      });
+    }
+
+    function changeDate(button, direction) {
+      const dateElement = button.parentNode.querySelector('.sector-date');
+      const parts = dateElement.textContent.split('/');
+      const currentDate = new Date(parts[2], parts[1] - 1, parts[0]);
+      currentDate.setDate(currentDate.getDate() + direction);
+      dateElement.textContent = formatDate(currentDate);
+    }
+
+    /**
+     * Función que solicita los históricos para el sector usando dos rangos:
+     * uno para el día de la fecha de referencia (día "actual") y otro para el día anterior.
+     * A partir de las lecturas se calcula:
+     *  - vol_sector: diferencia del valor (cercano a las 00:00) de la etiqueta sector.
+     *  - vol_abonados: diferencia de la suma de valores (cercanos a las 00:00) de todas las señales del subsector.
+     *  - anr: diferencia de los dos anteriores.
+     *  - eficiencia: (vol_abonados/vol_sector)*100.
+     */
+     function loadHistoricDataForSector(sector, referenceDate, token) {
+  // 1. Calcular el rango de fechas:
+  // - startDate: 3 días antes de referenceDate
+  // - endDate: referenceDate + 1 hora
+  let startDate = new Date(referenceDate);
+  startDate.setDate(startDate.getDate() - 3);
+
+  let endDate = new Date(referenceDate);
+  endDate.setHours(endDate.getHours() + 1);
+
+  // Convertir a formato ISO (para la petición)
+  const startISO = startDate.toISOString();
+  const endISO = endDate.toISOString();
+
+  // 2. Preparar las peticiones para cada tag:
+  const requests = [];
+
+  // Para cada tag del subsector:
+  sector.señalesSubsector.forEach(signalTag => {
+    requests.push({
+      startDate: startISO,
+      endDate: endISO,
+      tzi: "Europe/Madrid",
+      interval: 0,
+      top: 50,
+      skip: 0,
+      prev: false,
+      next: false,
+      dataVersion: "RAW",
+      asc: false,
+      tag: signalTag.trim()
+    });
+  });
+
+  // Para el tag del sector:
+  requests.push({
+    startDate: startISO,
+    endDate: endISO,
+    tzi: "Europe/Madrid",
+    interval: 0,
+    top: 50,
+    skip: 0,
+    prev: false,
+    next: false,
+    dataVersion: "RAW",
+    asc: false,
+    tag: sector.tag.trim()
+  });
+
+  // 3. Realizar la petición al endpoint con todas las solicitudes:
+  fetch("https://hermesmanager.saur.com.es/api/Historic/listHistoric", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify(requests)
+  })
+    .then(response => response.json())
+    .then(data => {
+        debugger;
+      console.log("Datos históricos para el sector", sector.tag, data);
+      // Aquí se procesarán los datos recibidos...
+      // (El siguiente paso vendrá según lo que necesites hacer con los datos)
+    })
+    .catch(error => {
+      console.error("Error al obtener los históricos para el sector", sector.tag, error);
+    });
+}
+
+    function loadHistoricDataForSector3(sector, referenceDate, token) {
+      // Definimos el rango para el día actual (la fecha de referencia) y el anterior
+      let currentDay = new Date(referenceDate);
+      currentDay.setHours(0,0,0,0);
+      let currentDayEnd = new Date(currentDay);
+      currentDayEnd.setHours(23,59,59,999);
+
+      let previousDay = new Date(referenceDate);
+      previousDay.setDate(previousDay.getDate()-1);
+      previousDay.setHours(0,0,0,0);
+      let previousDayEnd = new Date(previousDay);
+      previousDayEnd.setHours(23,59,59,999);
+
+      const currentStartISO = currentDay.toISOString();
+      const currentEndISO = currentDayEnd.toISOString();
+      const previousStartISO = previousDay.toISOString();
+      const previousEndISO = previousDayEnd.toISOString();
+
+      // Generamos las peticiones para cada etiqueta: cada señal se consulta para el día actual y el anterior.
+      const requests = [];
+
+      // Para cada señal del subsector:
+      sector.señalesSubsector.forEach(signalTag => {
+        // Día actual
+        requests.push({
+          startDate: currentStartISO,
+          endDate: currentEndISO,
+          tzi: "Europe/Madrid",
+          interval: 0,
+          top: 50,
+          skip: 0,
+          prev: false,
+          next: false,
+          dataVersion: "RAW",
+          asc: false,
+          tag: signalTag.trim()
+        });
+        // Día anterior
+        requests.push({
+          startDate: previousStartISO,
+          endDate: previousEndISO,
+          tzi: "Europe/Madrid",
+          interval: 0,
+          top: 50,
+          skip: 0,
+          prev: false,
+          next: false,
+          dataVersion: "RAW",
+          asc: false,
+          tag: signalTag.trim()
+        });
+      });
+      // Para la etiqueta del sector:
+      requests.push({
+        startDate: currentStartISO,
+        endDate: currentEndISO,
+        tzi: "Europe/Madrid",
+        interval: 0,
+        top: 50,
+        skip: 0,
+        prev: false,
+        next: false,
+        dataVersion: "RAW",
+        asc: false,
+        tag: sector.tag.trim()
+      });
+      requests.push({
+        startDate: previousStartISO,
+        endDate: previousEndISO,
+        tzi: "Europe/Madrid",
+        interval: 0,
+        top: 50,
+        skip: 0,
+        prev: false,
+        next: false,
+        dataVersion: "RAW",
+        asc: false,
+        tag: sector.tag.trim()
+      });
+
+      fetch("https://hermesmanager.saur.com.es/api/Historic/listHistoric", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify(requests)
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log("Datos históricos para el sector", sector.tag, data);
+        // Variables para guardar los valores:
+        let currentSectorValue = null;
+        let previousSectorValue = null;
+        let currentAbonadoSum = 0;
+        let previousAbonadoSum = 0;
+
+        // Función auxiliar para obtener el valor de la lectura más cercana a la medianoche (00:00)
+        function getNearestMidnightValue(historicEntry, targetDate) {
+          if (!historicEntry.data.data || !historicEntry.data.data.ms || historicEntry.data.data.ms.length === 0) return null;
+          const targetMidnight = new Date(targetDate);
+          targetMidnight.setHours(0,0,0,0);
+          let nearest = null;
+          let minDiff = Infinity;
+          historicEntry.data.data.ms.forEach((msValue, index) => {
+            const readingDate = new Date(msValue);
+            const diff = Math.abs(readingDate - targetMidnight);
+            if(diff < minDiff) {
+              minDiff = diff;
+              nearest = historicEntry.data.data.vs["0"][index];
+            }
+          });
+          return nearest;
+        }
+
+        // Procesamos cada entrada devuelta:
+        data.historics.forEach(entry => {
+          const tag = entry.data.tag;
+          if(!entry.data.data.ms || entry.data.data.ms.length === 0) return;
+          // Usamos el primer timestamp para determinar a qué día corresponde la entrada
+          const entryDate = new Date(entry.data.data.ms[0]);
+          // Si la entrada corresponde al día actual:
+          if(entryDate >= currentDay && entryDate <= currentDayEnd) {
+            const value = getNearestMidnightValue(entry, currentDay);
+            if(tag === sector.tag.trim()) {
+              currentSectorValue = value;
+            } else if(sector.señalesSubsector.includes(tag)) {
+              currentAbonadoSum += value;
+            }
+          } 
+          // Si la entrada corresponde al día anterior:
+          else if(entryDate >= previousDay && entryDate <= previousDayEnd) {
+            const value = getNearestMidnightValue(entry, previousDay);
+            if(tag === sector.tag.trim()) {
+              previousSectorValue = value;
+            } else if(sector.señalesSubsector.includes(tag)) {
+              previousAbonadoSum += value;
+            }
+          }
+        });
+
+        // Si se encontraron ambos valores, se realizan los cálculos:
+        if(currentSectorValue != null && previousSectorValue != null) {
+          const volSectorCalc = currentSectorValue - previousSectorValue;
+          const volAbonadosCalc = currentAbonadoSum - previousAbonadoSum;
+          const anrCalc = volSectorCalc - volAbonadosCalc;
+          // Se asume que la eficiencia se calcula como (vol_abonados / vol_sector) * 100
+          let efficiencyCalc = volSectorCalc !== 0 ? (volAbonadosCalc / volSectorCalc) * 100 : 0;
+
+          // Actualizamos los valores de la tarjeta correspondiente:
+          // Se busca la tarjeta cuyo elemento .sector-id incluya el tag del sector.
+          const cards = document.querySelectorAll('.glass-card');
+          cards.forEach(card => {
+            if(card.querySelector('.sector-id').textContent.indexOf(sector.tag) !== -1) {
+              card.querySelector('.vol-sector').textContent = volSectorCalc.toFixed(2) + " m³";
+              card.querySelector('.vol-abonados').textContent = volAbonadosCalc.toFixed(2) + " m³";
+              card.querySelector('.anr').textContent = anrCalc.toFixed(2) + " m³";
+              card.querySelector('.percentage').textContent = efficiencyCalc.toFixed(2) + " %";
+            }
+          });
+        } else {
+          console.warn("No se pudieron obtener los valores completos para el sector", sector.tag);
+        }
+      })
+      .catch(error => {
+        console.error("Error al obtener los históricos para el sector", sector.tag, error);
+      });
+    }
+
+    function obtenerToken() {
+      const url = "https://authentication.gestagua.es/auth/realms/Gestagua/protocol/openid-connect/token"; // Reemplaza con la URL real para obtener el token
+      const params = new URLSearchParams();
+      params.append("grant_type", "password");
+      params.append("client_id", "hermes-app");     // Reemplaza con el client_id configurado
+      params.append("username", "cguerrero");        // Reemplaza con el usuario
+      params.append("password", "123456");       // Reemplaza con la contraseña
+
+      return fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: params
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("Error en la petición de token");
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log("Token obtenido:", data.access_token);
+        return data.access_token; // Se asume que el token se encuentra en data.access_token
+      })
+      .catch(error => {
+        console.error("Error al obtener el token:", error);
+      });
+    }
+
+    // Al cargar la página, se inicializa el dashboard y se solicitan los históricos para cada sector
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeDashboard();
+        obtenerToken().then(token => {
+            sectors.forEach(sector => {
+                loadHistoricDataForSector(sector, sector.date, token);
+            });
+        });
+    });
+
+    // La función changeDateAndLoadInfo es similar a changeDate pero además recarga la información histórica.
+    function changeDateAndLoadInfo(button, direction) {
+      const card = button.closest('.sector-card');
+      const dateElement = card.querySelector('.sector-date');
+      const parts = dateElement.textContent.split('/');
+      const currentDate = new Date(parts[2], parts[1] - 1, parts[0]);
+      currentDate.setDate(currentDate.getDate() + direction);
+      dateElement.textContent = formatDate(currentDate);
+
+      const sectorTag = card.querySelector('.sector-id').textContent.split(' ')[1];
+      // Se asume que el sector se identifica por su tag
+      const sector = sectors.find(s => s.tag === sectorTag);
+      if(sector) {
+        obtenerToken().then(token => {
+          loadHistoricDataForSector(sector, currentDate, token);
+        });
+      }
+    }
+    
+  </script>
+</body>
+</html>
