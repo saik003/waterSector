@@ -399,12 +399,12 @@ function loadHistoricDataForSector(sector, referenceDate, token) {
       if (sectorHistoric) {
 
        // 1. Obtener el valor (y la hora real encontrada) a la hora 23 del día de referencia
-      const refResult = getNearestTargetValue(sectorHistoric, referenceDate, 23);
+      const refResult = getNearestTargetValue(sectorHistoric, referenceDate, 23,true);
     
     // 2. Calcular el día anterior y obtener su valor a la hora 23 (o lo más cercano)
     const previousDate = new Date(referenceDate);
     previousDate.setDate(previousDate.getDate() - 1);
-    const prevResult = getNearestTargetValue(sectorHistoric, previousDate, 23);
+    const prevResult = getNearestTargetValue(sectorHistoric, previousDate, 23,true);
     
     if (refResult && prevResult && refResult.value !== null && prevResult.value !== null) {
       // Calcular vol-sector como la diferencia entre el valor del día de referencia y el del día anterior
@@ -429,9 +429,9 @@ function loadHistoricDataForSector(sector, referenceDate, token) {
         const signalHistoric = data.historics.find(entry => entry.data.tag.trim() === signalTag.trim());
         if (signalHistoric) {
           // Obtener el valor para el día de referencia usando la capturedHour encontrada
-          const childRefResult = getNearestTargetValue(signalHistoric, referenceDate, capturedHour);
+          const childRefResult = getNearestTargetValue(signalHistoric, referenceDate, capturedHour, false);
           // Obtener el valor para el día anterior
-          const childPrevResult = getNearestTargetValue(signalHistoric, previousDate, capturedHour);
+          const childPrevResult = getNearestTargetValue(signalHistoric, previousDate, capturedHour, false);
           
           if (childRefResult && childPrevResult && childRefResult.value !== null && childPrevResult.value !== null) {
             // Se suma la diferencia (día de referencia - día anterior) para la señal
@@ -460,39 +460,77 @@ function loadHistoricDataForSector(sector, referenceDate, token) {
   }
 })
 }
-function getNearestTargetValue(historicEntry, targetDate, targetHour = 23) {
+/**
+ * Busca un registro en historicEntry que coincida con la hora objetivo.
+ * 
+ * @param {Object} historicEntry - Objeto con los datos históricos.
+ * @param {Date} targetDate - La fecha de referencia.
+ * @param {number} targetHour - La hora objetivo en UTC (por defecto 23).
+ * @param {boolean} [checkMinutes=true] - Si es true, se requiere que los minutos sean 0.
+ *                                        Si es false, sólo se compara la hora.
+ * @returns {Object|null} Un objeto con { value, chosenTime, capturedHour } o null si no se encuentra.
+ */
+/**
+ * Busca un registro en historicEntry que corresponda al mismo día (año, mes y día)
+ * que targetDate y que cumpla con la condición de hora (y minutos, si se indica).
+ *
+ * @param {Object} historicEntry - Objeto con los datos históricos.
+ * @param {Date} targetDate - La fecha de referencia.
+ * @param {number} targetHour - La hora objetivo en UTC (por defecto 23).
+ * @param {boolean} [checkMinutes=true] - Si es true, se requiere que los minutos sean 0.
+ *                                        Si es false, sólo se compara la hora.
+ * @returns {Object|null} Un objeto con { value, chosenTime, capturedHour } o null si no se encuentra.
+ */
+ function getNearestTargetValue(historicEntry, targetDate, targetHour = 23, checkMinutes = true) {
   if (
     !historicEntry.data.data ||
     !historicEntry.data.data.ms ||
     historicEntry.data.data.ms.length === 0
-  ) return null;
-  
-  // Construir la fecha objetivo en UTC usando el año, mes y día de targetDate
-  const year = targetDate.getUTCFullYear();
-  const month = targetDate.getUTCMonth();
-  const day = targetDate.getUTCDate();
-  // targetTime se crea en UTC con la hora indicada (por defecto, 23:00)
-  const targetTime = new Date(Date.UTC(year, month, day, targetHour, 0, 0, 0));
-  
-  let nearest = null;
-  let minDiff = Infinity;
-  let chosenTimestamp = null;
-  
-  // Recorrer cada timestamp (la cadena tiene "Z", por lo que se interpreta en UTC)
-  historicEntry.data.data.ms.forEach((timestamp, index) => {
-    const readingDate = new Date(timestamp); 
-    const diff = Math.abs(readingDate.getTime() - targetTime.getTime());
-    if (diff < minDiff) {
-      minDiff = diff;
-      nearest = historicEntry.data.data.vs["0"][index];
-      chosenTimestamp = readingDate;
+  ) {
+    return null;
+  }
+
+  // Extraer el día, mes y año de targetDate en UTC.
+  const targetYear = targetDate.getUTCFullYear();
+  const targetMonth = targetDate.getUTCMonth();
+  const targetDay = targetDate.getUTCDate();
+
+  // Recorrer cada timestamp y buscar uno que pertenezca al mismo día (UTC)
+  // y cumpla la condición de hora (y minutos, si se requiere).
+  for (let i = 0; i < historicEntry.data.data.ms.length; i++) {
+    const timestamp = historicEntry.data.data.ms[i];
+    const readingDate = new Date(timestamp); // Se interpreta en UTC gracias a la "Z" del string.
+
+    // Verificar que la lectura corresponda al mismo día, mes y año que targetDate.
+    if (
+      readingDate.getUTCFullYear() === targetYear &&
+      readingDate.getUTCMonth() === targetMonth &&
+      readingDate.getUTCDate() === targetDay
+    ) {
+      if (checkMinutes) {
+        // Se requiere que la lectura sea exactamente a targetHour:00 (ignorar segundos).
+        if (readingDate.getUTCHours() === targetHour && readingDate.getUTCMinutes() === 0) {
+          return {
+            value: historicEntry.data.data.vs["0"][i],
+            chosenTime: readingDate,
+            capturedHour: readingDate.getUTCHours()
+          };
+        }
+      } else {
+        // Solo se verifica la hora, sin importar los minutos.
+        if (readingDate.getUTCHours() === targetHour) {
+          return {
+            value: historicEntry.data.data.vs["0"][i],
+            chosenTime: readingDate,
+            capturedHour: readingDate.getUTCHours()
+          };
+        }
+      }
     }
-  });
+  }
   
-  // Se extrae la hora capturada en UTC del timestamp encontrado
-  const capturedHour = chosenTimestamp ? chosenTimestamp.getUTCHours() : null;
-  
-  return { value: nearest, chosenTime: chosenTimestamp, capturedHour: capturedHour };
+  // Si no se encuentra ningún registro que cumpla con las condiciones, se devuelve null.
+  return null;
 }
 
 
