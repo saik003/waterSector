@@ -239,77 +239,7 @@
      *  - anr: diferencia de los dos anteriores.
      *  - eficiencia: (vol_abonados/vol_sector)*100.
      */
-     function loadHistoricDataForSector(sector, referenceDate, token) {
-  // 1. Calcular el rango de fechas:
-  // - startDate: 3 días antes de referenceDate
-  // - endDate: referenceDate + 1 hora
-  let startDate = new Date(referenceDate);
-  startDate.setDate(startDate.getDate() - 3);
-
-  let endDate = new Date(referenceDate);
-  endDate.setHours(endDate.getHours() + 1);
-
-  // Convertir a formato ISO (para la petición)
-  const startISO = startDate.toISOString();
-  const endISO = endDate.toISOString();
-
-  // 2. Preparar las peticiones para cada tag:
-  const requests = [];
-
-  // Para cada tag del subsector:
-  sector.señalesSubsector.forEach(signalTag => {
-    requests.push({
-      startDate: startISO,
-      endDate: endISO,
-      tzi: "Europe/Madrid",
-      interval: 0,
-      top: 50,
-      skip: 0,
-      prev: false,
-      next: false,
-      dataVersion: "RAW",
-      asc: false,
-      tag: signalTag.trim()
-    });
-  });
-
-  // Para el tag del sector:
-  requests.push({
-    startDate: startISO,
-    endDate: endISO,
-    tzi: "Europe/Madrid",
-    interval: 0,
-    top: 50,
-    skip: 0,
-    prev: false,
-    next: false,
-    dataVersion: "RAW",
-    asc: false,
-    tag: sector.tag.trim()
-  });
-
-  // 3. Realizar la petición al endpoint con todas las solicitudes:
-  fetch("https://hermesmanager.saur.com.es/api/Historic/listHistoric", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token
-    },
-    body: JSON.stringify(requests)
-  })
-    .then(response => response.json())
-    .then(data => {
-        debugger;
-      console.log("Datos históricos para el sector", sector.tag, data);
-      // Aquí se procesarán los datos recibidos...
-      // (El siguiente paso vendrá según lo que necesites hacer con los datos)
-    })
-    .catch(error => {
-      console.error("Error al obtener los históricos para el sector", sector.tag, error);
-    });
-}
-
-    function loadHistoricDataForSector3(sector, referenceDate, token) {
+    function loadHistoricDataForSector(sector, referenceDate, token) {
       // Definimos el rango para el día actual (la fecha de referencia) y el anterior
       let currentDay = new Date(referenceDate);
       currentDay.setHours(0,0,0,0);
